@@ -10,6 +10,7 @@ import sys
 import traceback
 from copy import deepcopy
 from pathlib import Path
+from timeit import default_timer
 from typing import Any, Iterable
 
 import click
@@ -334,7 +335,8 @@ class KedroSession:
         save_version = session_id
         extra_params = self.store.get("extra_params") or {}
         context = self.load_context()
-
+        self._logger.info("Starting creating pipelines...")
+        start_time = default_timer()
         name = pipeline_name or "__default__"
 
         try:
@@ -356,6 +358,8 @@ class KedroSession:
             node_namespace=namespace,
         )
 
+        self._logger.info("Finished creating pipelines in %.2f seconds", default_timer() - start_time)
+
         record_data = {
             "session_id": session_id,
             "project_path": self._project_path.as_posix(),
@@ -374,10 +378,13 @@ class KedroSession:
             "runner": getattr(runner, "__name__", str(runner)),
         }
 
+        self._logger.info("Creating catalog...")
+        start_time = default_timer()
         catalog = context._get_catalog(
             save_version=save_version,
             load_versions=load_versions,
         )
+        self._logger.info("Finished creating catalog in %.2f seconds", default_timer() - start_time)
 
         # Run the runner
         hook_manager = self._hook_manager
