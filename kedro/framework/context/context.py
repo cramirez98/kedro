@@ -19,6 +19,8 @@ from kedro.io import DataCatalog
 from kedro.pipeline.transcoding import _transcode_split
 
 
+LOGGER = logging.getLogger(__name__)
+
 def _is_relative_path(path_string: str) -> bool:
     """Checks whether a path string is a relative path.
 
@@ -220,7 +222,7 @@ class KedroContext:
             KedroContextError: Incorrect ``DataCatalog`` registered for the project.
 
         """
-        print("Loading catalog...")
+        LOGGER.info("Creating catalog...")
         start_time = default_timer()
         # '**/catalog*' reads modular pipeline configs
         conf_catalog = self.config_loader["catalog"]
@@ -242,7 +244,7 @@ class KedroContext:
         catalog.add_feed_dict(feed_dict)
         _validate_transcoded_datasets(catalog)
 
-        self._logger.info("Finished creating catalog in %.2f seconds", default_timer() - start_time)
+        LOGGER.info("Finished creating catalog in %.2f seconds", default_timer() - start_time)
         self._hook_manager.hook.after_catalog_created(
             catalog=catalog,
             conf_catalog=conf_catalog,
