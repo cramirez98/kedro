@@ -222,8 +222,9 @@ class KedroContext:
             KedroContextError: Incorrect ``DataCatalog`` registered for the project.
 
         """
-        LOGGER.info("Creating catalog...")
         start_time = default_timer()
+
+        start_time_catalog_config = default_timer()
         # '**/catalog*' reads modular pipeline configs
         conf_catalog = self.config_loader["catalog"]
         # turn relative paths in conf_catalog into absolute paths
@@ -232,19 +233,23 @@ class KedroContext:
             project_path=self.project_path, conf_dictionary=conf_catalog
         )
         conf_creds = self._get_config_credentials()
+        LOGGER.info("FINISHED catalog config reader in %.2f seconds", default_timer() - start_time_catalog_config)
 
+        start_time_catalog_object = default_timer()
         catalog: DataCatalog = settings.DATA_CATALOG_CLASS.from_config(
             catalog=conf_catalog,
             credentials=conf_creds,
             load_versions=load_versions,
             save_version=save_version,
         )
+        LOGGER.info("FINISHED DataCatalog object creation in %.2f seconds", default_timer() - start_time_catalog_object)
 
+        start_time_additional_config = default_timer()
         feed_dict = self._get_feed_dict()
         catalog.add_feed_dict(feed_dict)
         _validate_transcoded_datasets(catalog)
+        LOGGER.info("FINISHED catalog additional config in %.2f seconds", default_timer() - start_time_additional_config)
 
-        LOGGER.info("Finished creating catalog in %.2f seconds", default_timer() - start_time)
         self._hook_manager.hook.after_catalog_created(
             catalog=catalog,
             conf_catalog=conf_catalog,
@@ -253,6 +258,7 @@ class KedroContext:
             save_version=save_version,
             load_versions=load_versions,
         )
+        LOGGER.info("FINISHED get_catalog in %.2f seconds", default_timer() - start_time)
         return catalog
 
     def _get_feed_dict(self) -> dict[str, Any]:

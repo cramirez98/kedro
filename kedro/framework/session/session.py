@@ -335,8 +335,7 @@ class KedroSession:
         save_version = session_id
         extra_params = self.store.get("extra_params") or {}
         context = self.load_context()
-        self._logger.info("Starting creating pipelines...")
-        start_time = default_timer()
+        start_time_pipe_creation = default_timer()
         name = pipeline_name or "__default__"
 
         try:
@@ -347,9 +346,8 @@ class KedroSession:
                 f"It needs to be generated and returned "
                 f"by the 'register_pipelines' function."
             ) from exc
-        self._logger.info("Finished creating pipelines in %.2f seconds", default_timer() - start_time)
+        self._logger.info("FINISHED pipeline creation in %.2f seconds", default_timer() - start_time_pipe_creation)
 
-        self._logger.info("Starting filtering pipeline...")
         start_time = default_timer()
         filtered_pipeline = pipeline.filter(
             tags=tags,
