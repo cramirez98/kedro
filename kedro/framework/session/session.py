@@ -347,7 +347,10 @@ class KedroSession:
                 f"It needs to be generated and returned "
                 f"by the 'register_pipelines' function."
             ) from exc
+        self._logger.info("Finished creating pipelines in %.2f seconds", default_timer() - start_time)
 
+        self._logger.info("Starting filtering pipeline...")
+        start_time = default_timer()
         filtered_pipeline = pipeline.filter(
             tags=tags,
             from_nodes=from_nodes,
@@ -357,8 +360,7 @@ class KedroSession:
             to_outputs=to_outputs,
             node_namespace=namespace,
         )
-
-        self._logger.info("Finished creating pipelines in %.2f seconds", default_timer() - start_time)
+        self._logger.info("Finished filtering pipeline in %.2f seconds", default_timer() - start_time)
 
         record_data = {
             "session_id": session_id,
