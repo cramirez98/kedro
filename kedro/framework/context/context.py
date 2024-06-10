@@ -226,13 +226,24 @@ class KedroContext:
 
         start_time_catalog_config = default_timer()
         # '**/catalog*' reads modular pipeline configs
+        start_time_catalog_config_reader = default_timer()
         conf_catalog = self.config_loader["catalog"]
+        LOGGER.info("FINISHED catalog config in %.2f seconds", default_timer() - start_time_catalog_config_reader)
+
+        start_time_paths = default_timer()
         # turn relative paths in conf_catalog into absolute paths
         # before initializing the catalog
         conf_catalog = _convert_paths_to_absolute_posix(
             project_path=self.project_path, conf_dictionary=conf_catalog
         )
+
+        LOGGER.info("FINISHED catalog paths to absolute in %.2f seconds", default_timer() - start_time_paths)
+
+        start_time_credentials = default_timer()
         conf_creds = self._get_config_credentials()
+
+        LOGGER.info("FINISHED catalog credentials in %.2f seconds", default_timer() - start_time_credentials)
+
         LOGGER.info("FINISHED catalog config reader in %.2f seconds", default_timer() - start_time_catalog_config)
 
         start_time_catalog_object = default_timer()
