@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 from copy import deepcopy
 from pathlib import Path, PurePosixPath, PureWindowsPath
+from timeit import default_timer
 from typing import Any
 from urllib.parse import urlparse
 from warnings import warn
@@ -219,6 +220,8 @@ class KedroContext:
             KedroContextError: Incorrect ``DataCatalog`` registered for the project.
 
         """
+        print("Loading catalog...")
+        start_time = default_timer()
         # '**/catalog*' reads modular pipeline configs
         conf_catalog = self.config_loader["catalog"]
         # turn relative paths in conf_catalog into absolute paths
@@ -238,6 +241,8 @@ class KedroContext:
         feed_dict = self._get_feed_dict()
         catalog.add_feed_dict(feed_dict)
         _validate_transcoded_datasets(catalog)
+
+        self._logger.info("Finished creating catalog in %.2f seconds", default_timer() - start_time)
         self._hook_manager.hook.after_catalog_created(
             catalog=catalog,
             conf_catalog=conf_catalog,
