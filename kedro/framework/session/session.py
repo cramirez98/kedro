@@ -379,10 +379,14 @@ class KedroSession:
             "runner": getattr(runner, "__name__", str(runner)),
         }
 
+        self._logger.info("before get catalog")
+
         catalog = context._get_catalog(
             save_version=save_version,
             load_versions=load_versions,
         )
+
+        self._logger.info("after get catalog")
 
         # Run the runner
         hook_manager = self._hook_manager

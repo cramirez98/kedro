@@ -240,7 +240,9 @@ class KedroContext:
 
         feed_dict = self._get_feed_dict()
         catalog.add_feed_dict(feed_dict)
+        logging.getLogger(__name__).info(f"Before transcoded validation")
         _validate_transcoded_datasets(catalog)
+        logging.getLogger(__name__).info(f"After transcoded validation")
         self._hook_manager.hook.after_catalog_created(
             catalog=catalog,
             conf_catalog=conf_catalog,
