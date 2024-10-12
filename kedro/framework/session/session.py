@@ -341,9 +341,10 @@ class KedroSession:
         context = self.load_context()
 
         name = pipeline_name or "__default__"
-
         try:
+            self._logger.info("Before loading pipelines")
             pipeline = pipelines[name]
+            self._logger.info("After loading pipelines")
         except KeyError as exc:
             raise ValueError(
                 f"Failed to find the pipeline named '{name}'. "
@@ -379,14 +380,10 @@ class KedroSession:
             "runner": getattr(runner, "__name__", str(runner)),
         }
 
-        self._logger.info("before get catalog")
-
         catalog = context._get_catalog(
             save_version=save_version,
             load_versions=load_versions,
         )
-
-        self._logger.info("after get catalog")
 
         # Run the runner
         hook_manager = self._hook_manager

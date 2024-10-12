@@ -251,6 +251,7 @@ class KedroContext:
             save_version=save_version,
             load_versions=load_versions,
         )
+        logging.getLogger(__name__).info(f"After catalog hook")
         return catalog
 
     def _get_feed_dict(self) -> dict[str, Any]:
