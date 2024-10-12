@@ -2,17 +2,20 @@
 used to run the ``Pipeline`` in a sequential manner using a topological sort
 of provided nodes.
 """
+
 from __future__ import annotations
 
 from collections import Counter
 from itertools import chain
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from pluggy import PluginManager
-
-from kedro.io import DataCatalog
-from kedro.pipeline import Pipeline
 from kedro.runner.runner import AbstractRunner, run_node
+
+if TYPE_CHECKING:
+    from pluggy import PluginManager
+
+    from kedro.io import CatalogProtocol
+    from kedro.pipeline import Pipeline
 
 
 class SequentialRunner(AbstractRunner):
@@ -31,7 +34,7 @@ class SequentialRunner(AbstractRunner):
         Args:
             is_async: If True, the node inputs and outputs are loaded and saved
                 asynchronously with threads. Defaults to False.
-            extra_dataset_patterns: Extra dataset factory patterns to be added to the DataCatalog
+            extra_dataset_patterns: Extra dataset factory patterns to be added to the catalog
                 during the run. This is used to set the default datasets to MemoryDataset
                 for `SequentialRunner`.
 
@@ -45,7 +48,7 @@ class SequentialRunner(AbstractRunner):
     def _run(
         self,
         pipeline: Pipeline,
-        catalog: DataCatalog,
+        catalog: CatalogProtocol,
         hook_manager: PluginManager,
         session_id: str | None = None,
     ) -> None:
@@ -53,7 +56,7 @@ class SequentialRunner(AbstractRunner):
 
         Args:
             pipeline: The ``Pipeline`` to run.
-            catalog: The ``DataCatalog`` from which to fetch data.
+            catalog: An implemented instance of ``CatalogProtocol`` from which to fetch data.
             hook_manager: The ``PluginManager`` to activate hooks.
             session_id: The id of the session.
 
@@ -78,7 +81,7 @@ class SequentialRunner(AbstractRunner):
                 self._suggest_resume_scenario(pipeline, done_nodes, catalog)
                 raise
 
-            # decrement load counts and release any data sets we've finished with
+            # decrement load counts and release any datasets we've finished with
             for dataset in node.inputs:
                 load_counts[dataset] -= 1
                 if load_counts[dataset] < 1 and dataset not in pipeline.inputs():

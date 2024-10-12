@@ -22,6 +22,8 @@ We assume you know these concepts:
 
 We don't assume knowledge of software engineering in Python, so the course contains information about reusability principles, how to create a Python package, and how to use version control.
 
+Please note that we do expect users to have Git installed, as it is a prerequisite for the `kedro new` flow, which is used when creating a new project.
+
 ## What you'll learn
 
 In short, you'll learn answers to the following:
@@ -32,7 +34,7 @@ In short, you'll learn answers to the following:
 * What do you need to do to create a Kedro project?
 * How can you refactor a Jupyter notebook to a Kedro project?
 * How do you package Python code as a library?
-* How do you work with Kedro projects in VSCode?
+* How do you work with Kedro projects in VS Code?
 * What are namespaces and dataset factories?
 * What is needed to deploy a Kedro project using container solutions like Docker and open source orchestrators like Airflow?
 * What are Kedro plugins?
@@ -60,7 +62,7 @@ You don't need to register for the course and you can skip around the sections t
 1. [Set up the Kedro Data Catalog](https://www.youtube.com/watch?v=rl2cncGxyts)
 1. [Explore the spaceflights data](https://www.youtube.com/watch?v=bZD8N0yv3Fs)
 1. [Refactor your data processing code into functions](https://www.youtube.com/watch?v=VFcrvnnNas4)
-1. [Create your first data pipeline with Kedro](https://www.youtube.com/watch?v=VFcrvnnNas4)
+1. [Create your first data pipeline with Kedro](https://www.youtube.com/watch?v=3YeE_gvDCvw)
 1. [Assemble your nodes into a Kedro pipeline](https://www.youtube.com/watch?v=P__gFG1TmMo)
 1. [Run your Kedro pipeline](https://www.youtube.com/watch?v=sll_LhZE-p8)
 1. [Visualise your data pipeline with Kedro-Viz](https://www.youtube.com/watch?v=KWqSzbHgNW4)

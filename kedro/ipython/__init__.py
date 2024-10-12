@@ -14,7 +14,10 @@ import typing
 import warnings
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Callable, OrderedDict
+from typing import TYPE_CHECKING, Any, Callable
+
+if TYPE_CHECKING:
+    from collections import OrderedDict
 
 from IPython.core.getipython import get_ipython
 from IPython.core.magic import needs_local_scope, register_line_magic
@@ -97,7 +100,7 @@ def magic_reload_kedro(
 ) -> None:
     """
     The `%reload_kedro` IPython line magic.
-    See https://kedro.readthedocs.io/en/stable/notebooks_and_ipython/kedro_and_notebooks.html#reload-kedro-line-magic
+    See https://docs.kedro.org/en/stable/notebooks_and_ipython/kedro_and_notebooks.html#reload-kedro-line-magic
     for more.
     """
     args = parse_argstring(magic_reload_kedro, line)
@@ -163,7 +166,11 @@ def _resolve_project_path(
     if path:
         project_path = Path(path).expanduser().resolve()
     else:
-        if local_namespace and "context" in local_namespace:
+        if (
+            local_namespace
+            and local_namespace.get("context")
+            and hasattr(local_namespace["context"], "project_path")
+        ):
             project_path = local_namespace["context"].project_path
         else:
             project_path = _find_kedro_project(Path.cwd())
@@ -177,7 +184,8 @@ def _resolve_project_path(
     if (
         project_path
         and local_namespace
-        and "context" in local_namespace
+        and local_namespace.get("context")
+        and hasattr(local_namespace["context"], "project_path")  # Avoid name collision
         and project_path != local_namespace["context"].project_path
     ):
         logger.info("Updating path to Kedro project: %s...", project_path)
@@ -355,10 +363,30 @@ def _prepare_imports(node_func: Callable) -> str:
     if python_file:
         import_statement = []
         with open(python_file) as file:
+            # Handle multiline imports, i.e.
+            # from lib import (
+            # a,
+            # b,
+            # c
+            # )
+            # This will not work with all edge cases but good enough with common cases that
+            # are formatted automatically by black, ruff etc.
+            inside_bracket = False
             # Parse any line start with from or import statement
-            for line in file.readlines():
-                if line.startswith("from") or line.startswith("import"):
-                    import_statement.append(line.strip())
+
+            for _ in file.readlines():
+                line = _.strip()
+                if not inside_bracket:
+                    # The common case
+                    if line.startswith("from") or line.startswith("import"):
+                        import_statement.append(line)
+                        if line.endswith("("):
+                            inside_bracket = True
+                # Inside multi-lines import, append everything.
+                else:
+                    import_statement.append(line)
+                    if line.endswith(")"):
+                        inside_bracket = False
 
         clean_imports = "\n".join(import_statement).strip()
         return clean_imports

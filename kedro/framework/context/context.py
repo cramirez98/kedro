@@ -1,25 +1,25 @@
 """This module provides context for Kedro project."""
+
 from __future__ import annotations
 
 import logging
 from copy import deepcopy
 from pathlib import Path, PurePosixPath, PureWindowsPath
-from timeit import default_timer
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 from warnings import warn
 
 from attrs import define, field
 from omegaconf import OmegaConf
-from pluggy import PluginManager
 
 from kedro.config import AbstractConfigLoader, MissingConfigException
 from kedro.framework.project import settings
-from kedro.io import DataCatalog
+from kedro.io import CatalogProtocol, DataCatalog  # noqa: TCH001
 from kedro.pipeline.transcoding import _transcode_split
 
+if TYPE_CHECKING:
+    from pluggy import PluginManager
 
-LOGGER = logging.getLogger(__name__)
 
 def _is_relative_path(path_string: str) -> bool:
     """Checks whether a path string is a relative path.
@@ -123,17 +123,17 @@ def _convert_paths_to_absolute_posix(
     return conf_dictionary
 
 
-def _validate_transcoded_datasets(catalog: DataCatalog) -> None:
+def _validate_transcoded_datasets(catalog: CatalogProtocol) -> None:
     """Validates transcoded datasets are correctly named
 
     Args:
-        catalog (DataCatalog): The catalog object containing the
-        datasets to be validated.
+        catalog: The catalog object containing the datasets to be
+            validated.
 
     Raises:
         ValueError: If a dataset name does not conform to the expected
-        transcoding naming conventions,a ValueError is raised by the
-        `_transcode_split` function.
+            transcoding naming conventions,a ValueError is raised by the
+            `_transcode_split` function.
 
     """
     for dataset_name in catalog._datasets.keys():
@@ -178,13 +178,13 @@ class KedroContext:
     )
 
     @property
-    def catalog(self) -> DataCatalog:
-        """Read-only property referring to Kedro's ``DataCatalog`` for this context.
+    def catalog(self) -> CatalogProtocol:
+        """Read-only property referring to Kedro's catalog` for this context.
 
         Returns:
-            DataCatalog defined in `catalog.yml`.
+            catalog defined in `catalog.yml`.
         Raises:
-            KedroContextError: Incorrect ``DataCatalog`` registered for the project.
+            KedroContextError: Incorrect catalog registered for the project.
 
         """
         return self._get_catalog()
@@ -200,7 +200,7 @@ class KedroContext:
         try:
             params = self.config_loader["parameters"]
         except MissingConfigException as exc:
-            warn(f"Parameters not found in your Kedro project config.\n{str(exc)}")
+            warn(f"Parameters not found in your Kedro project config.\n{exc!s}")
             params = {}
 
         if self._extra_params:
@@ -213,54 +213,34 @@ class KedroContext:
         self,
         save_version: str | None = None,
         load_versions: dict[str, str] | None = None,
-    ) -> DataCatalog:
-        """A hook for changing the creation of a DataCatalog instance.
+    ) -> CatalogProtocol:
+        """A hook for changing the creation of a catalog instance.
 
         Returns:
-            DataCatalog defined in `catalog.yml`.
+            catalog defined in `catalog.yml`.
         Raises:
-            KedroContextError: Incorrect ``DataCatalog`` registered for the project.
+            KedroContextError: Incorrect catalog registered for the project.
 
         """
-        start_time = default_timer()
-
-        start_time_catalog_config = default_timer()
         # '**/catalog*' reads modular pipeline configs
-        start_time_catalog_config_reader = default_timer()
         conf_catalog = self.config_loader["catalog"]
-        LOGGER.info("FINISHED catalog config in %.2f seconds", default_timer() - start_time_catalog_config_reader)
-
-        start_time_paths = default_timer()
         # turn relative paths in conf_catalog into absolute paths
         # before initializing the catalog
         conf_catalog = _convert_paths_to_absolute_posix(
             project_path=self.project_path, conf_dictionary=conf_catalog
         )
-
-        LOGGER.info("FINISHED catalog paths to absolute in %.2f seconds", default_timer() - start_time_paths)
-
-        start_time_credentials = default_timer()
         conf_creds = self._get_config_credentials()
 
-        LOGGER.info("FINISHED catalog credentials in %.2f seconds", default_timer() - start_time_credentials)
-
-        LOGGER.info("FINISHED catalog config reader in %.2f seconds", default_timer() - start_time_catalog_config)
-
-        start_time_catalog_object = default_timer()
         catalog: DataCatalog = settings.DATA_CATALOG_CLASS.from_config(
             catalog=conf_catalog,
             credentials=conf_creds,
             load_versions=load_versions,
             save_version=save_version,
         )
-        LOGGER.info("FINISHED DataCatalog object creation in %.2f seconds", default_timer() - start_time_catalog_object)
 
-        start_time_additional_config = default_timer()
         feed_dict = self._get_feed_dict()
         catalog.add_feed_dict(feed_dict)
         _validate_transcoded_datasets(catalog)
-        LOGGER.info("FINISHED catalog additional config in %.2f seconds", default_timer() - start_time_additional_config)
-
         self._hook_manager.hook.after_catalog_created(
             catalog=catalog,
             conf_catalog=conf_catalog,
@@ -269,7 +249,6 @@ class KedroContext:
             save_version=save_version,
             load_versions=load_versions,
         )
-        LOGGER.info("FINISHED get_catalog in %.2f seconds", default_timer() - start_time)
         return catalog
 
     def _get_feed_dict(self) -> dict[str, Any]:

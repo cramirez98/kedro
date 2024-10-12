@@ -1,10 +1,11 @@
 """A collection of CLI commands for working with Kedro project."""
+
 from __future__ import annotations
 
 import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import click
 
@@ -21,8 +22,10 @@ from kedro.framework.cli.utils import (
 )
 from kedro.framework.project import settings
 from kedro.framework.session import KedroSession
-from kedro.framework.startup import ProjectMetadata
 from kedro.utils import load_obj
+
+if TYPE_CHECKING:
+    from kedro.framework.startup import ProjectMetadata
 
 NO_DEPENDENCY_MESSAGE = """{module} is not installed. Please make sure {module} is in
 requirements.txt and run 'pip install -r requirements.txt'."""
@@ -69,13 +72,13 @@ def project_group() -> None:  # pragma: no cover
 @forward_command(project_group, forward_help=True)
 @env_option
 @click.pass_obj  # this will pass the metadata as first argument
-def ipython(metadata: ProjectMetadata, /, env: str, args: Any, **kwargs: Any) -> None:  # noqa: unused-argument
+def ipython(metadata: ProjectMetadata, /, env: str, args: Any, **kwargs: Any) -> None:
     """Open IPython with project specific variables loaded."""
     _check_module_importable("IPython")
 
     if env:
         os.environ["KEDRO_ENV"] = env
-    call(["ipython", "--ext", "kedro.ipython"] + list(args))
+    call(["ipython", "--ext", "kedro.ipython", *list(args)])
 
 
 @project_group.command()
@@ -212,7 +215,7 @@ def run(  # noqa: PLR0913
     conf_source: str,
     params: dict[str, Any],
     namespace: str,
-) -> None:
+) -> dict[str, Any]:
     """Run the pipeline."""
 
     runner_obj = load_obj(runner or "SequentialRunner", "kedro.runner")
@@ -222,7 +225,7 @@ def run(  # noqa: PLR0913
     with KedroSession.create(
         env=env, conf_source=conf_source, extra_params=params
     ) as session:
-        session.run(
+        return session.run(
             tags=tuple_tags,
             runner=runner_obj(is_async=is_async),
             node_names=tuple_node_names,

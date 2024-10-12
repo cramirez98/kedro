@@ -2,16 +2,18 @@
 For more information about these specifications, please visit
 [Pluggy's documentation](https://pluggy.readthedocs.io/en/stable/#specs)
 """
+
 from __future__ import annotations
 
-from typing import Any
-
-from kedro.framework.context import KedroContext
-from kedro.io import DataCatalog
-from kedro.pipeline import Pipeline
-from kedro.pipeline.node import Node
+from typing import TYPE_CHECKING, Any
 
 from .markers import hook_spec
+
+if TYPE_CHECKING:
+    from kedro.framework.context import KedroContext
+    from kedro.io import CatalogProtocol
+    from kedro.pipeline import Pipeline
+    from kedro.pipeline.node import Node
 
 
 class DataCatalogSpecs:
@@ -20,7 +22,7 @@ class DataCatalogSpecs:
     @hook_spec
     def after_catalog_created(  # noqa: PLR0913
         self,
-        catalog: DataCatalog,
+        catalog: CatalogProtocol,
         conf_catalog: dict[str, Any],
         conf_creds: dict[str, Any],
         feed_dict: dict[str, Any],
@@ -48,10 +50,10 @@ class NodeSpecs:
     """Namespace that defines all specifications for a node's lifecycle hooks."""
 
     @hook_spec
-    def before_node_run(  # noqa: PLR0913
+    def before_node_run(
         self,
         node: Node,
-        catalog: DataCatalog,
+        catalog: CatalogProtocol,
         inputs: dict[str, Any],
         is_async: bool,
         session_id: str,
@@ -61,7 +63,7 @@ class NodeSpecs:
 
         Args:
             node: The ``Node`` to run.
-            catalog: A ``DataCatalog`` containing the node's inputs and outputs.
+            catalog: An implemented instance of ``CatalogProtocol`` containing the node's inputs and outputs.
             inputs: The dictionary of inputs dataset.
                 The keys are dataset names and the values are the actual loaded input data,
                 not the dataset instance.
@@ -79,7 +81,7 @@ class NodeSpecs:
     def after_node_run(  # noqa: PLR0913
         self,
         node: Node,
-        catalog: DataCatalog,
+        catalog: CatalogProtocol,
         inputs: dict[str, Any],
         outputs: dict[str, Any],
         is_async: bool,
@@ -91,7 +93,7 @@ class NodeSpecs:
 
         Args:
             node: The ``Node`` that ran.
-            catalog: A ``DataCatalog`` containing the node's inputs and outputs.
+            catalog: An implemented instance of ``CatalogProtocol`` containing the node's inputs and outputs.
             inputs: The dictionary of inputs dataset.
                 The keys are dataset names and the values are the actual loaded input data,
                 not the dataset instance.
@@ -108,7 +110,7 @@ class NodeSpecs:
         self,
         error: Exception,
         node: Node,
-        catalog: DataCatalog,
+        catalog: CatalogProtocol,
         inputs: dict[str, Any],
         is_async: bool,
         session_id: str,
@@ -120,7 +122,7 @@ class NodeSpecs:
         Args:
             error: The uncaught exception thrown during the node run.
             node: The ``Node`` to run.
-            catalog: A ``DataCatalog`` containing the node's inputs and outputs.
+            catalog: An implemented instance of ``CatalogProtocol`` containing the node's inputs and outputs.
             inputs: The dictionary of inputs dataset.
                 The keys are dataset names and the values are the actual loaded input data,
                 not the dataset instance.
@@ -135,7 +137,7 @@ class PipelineSpecs:
 
     @hook_spec
     def before_pipeline_run(
-        self, run_params: dict[str, Any], pipeline: Pipeline, catalog: DataCatalog
+        self, run_params: dict[str, Any], pipeline: Pipeline, catalog: CatalogProtocol
     ) -> None:
         """Hook to be invoked before a pipeline runs.
 
@@ -162,7 +164,7 @@ class PipelineSpecs:
                    }
 
             pipeline: The ``Pipeline`` that will be run.
-            catalog: The ``DataCatalog`` to be used during the run.
+            catalog: An implemented instance of ``CatalogProtocol`` to be used during the run.
         """
         pass
 
@@ -172,7 +174,7 @@ class PipelineSpecs:
         run_params: dict[str, Any],
         run_result: dict[str, Any],
         pipeline: Pipeline,
-        catalog: DataCatalog,
+        catalog: CatalogProtocol,
     ) -> None:
         """Hook to be invoked after a pipeline runs.
 
@@ -200,7 +202,7 @@ class PipelineSpecs:
 
             run_result: The output of ``Pipeline`` run.
             pipeline: The ``Pipeline`` that was run.
-            catalog: The ``DataCatalog`` used during the run.
+            catalog: An implemented instance of ``CatalogProtocol`` used during the run.
         """
         pass
 
@@ -210,7 +212,7 @@ class PipelineSpecs:
         error: Exception,
         run_params: dict[str, Any],
         pipeline: Pipeline,
-        catalog: DataCatalog,
+        catalog: CatalogProtocol,
     ) -> None:
         """Hook to be invoked if a pipeline run throws an uncaught Exception.
         The signature of this error hook should match the signature of ``before_pipeline_run``
@@ -240,7 +242,7 @@ class PipelineSpecs:
                    }
 
             pipeline: The ``Pipeline`` that will was run.
-            catalog: The ``DataCatalog`` used during the run.
+            catalog: An implemented instance of ``CatalogProtocol`` used during the run.
         """
         pass
 

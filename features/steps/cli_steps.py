@@ -302,6 +302,7 @@ def create_project_with_starter(context, starter):
         env=context.env,
         cwd=context.temp_dir,
     )
+
     assert res.returncode == OK_EXIT_CODE, res
 
 
@@ -341,7 +342,7 @@ def commit_changes_to_git(context):
 def exec_kedro_target(context, command):
     """Execute Kedro target."""
     split_command = command.split()
-    cmd = [context.kedro] + split_command
+    cmd = [context.kedro, *split_command]
     context.result = run(cmd, env=context.env, cwd=str(context.root_project_dir))
 
 
@@ -377,7 +378,7 @@ def get_kedro_version_python(context):
 def exec_notebook(context, command):
     """Execute Kedro Jupyter target."""
     split_command = command.split()
-    cmd = [context.kedro, "jupyter"] + split_command
+    cmd = [context.kedro, "jupyter", *split_command]
 
     # Jupyter notebook forks a child process from a parent process, and
     # only kills the parent process when it is terminated
@@ -483,7 +484,12 @@ def add_req(context: behave.runner.Context, dependency: str):
 @then("CLI should print the version in an expected format")
 def check_kedro_version(context):
     """Behave step to check validity of the kedro version."""
-    version_no = context.version_str.split()[-1]
+    CLI_flat_list = context.version_str.split()
+    CLI_dictionary = {
+        CLI_flat_list[i]: CLI_flat_list[i + 1]
+        for i in range(0, len(CLI_flat_list) - 1, 2)
+    }
+    version_no = CLI_dictionary.get("version")
     assert version_no == kedro.__version__
 
 
@@ -553,6 +559,17 @@ def check_one_node_run(context, number):
 @then('the logs should show that "{node}" was run')
 def check_correct_nodes_run(context, node):
     expected_log_line = f"Running node: {node}"
+    stdout = context.result.stdout
+    clean_logs = util.clean_up_log(stdout)
+    assert expected_log_line in clean_logs, (
+        "Expected the following message segment to be printed on stdout: "
+        f"{expected_log_line},\nbut got {stdout}"
+    )
+
+
+@then("the logs should show that load_node executed successfully")
+def check_load_node_run(context):
+    expected_log_line = "load_node executed successfully"
     stdout = context.result.stdout
     clean_logs = util.clean_up_log(stdout)
     assert expected_log_line in clean_logs, (
@@ -694,7 +711,7 @@ def check_docs_generated(context: behave.runner.Context):
         context.root_project_dir / "docs" / "build" / "html" / "index.html"
     ).read_text("utf-8")
     project_repo = context.project_name.replace("-", "_")
-    assert f"Welcome to project {project_repo}’s API docs!" in index_html, index_html
+    assert f"Welcome to project {project_repo}'s API docs!" in index_html, index_html
 
 
 @then("requirements should be generated")
@@ -711,18 +728,6 @@ def check_dependency_in_reqs(context: behave.runner.Context, dependency: str):
     assert dependency in reqs_path.read_text()
 
 
-@then("Code cell with node tag should be converted into kedro node")
-def check_cell_conversion(context: behave.runner.Context):
-    converted_file = (
-        context.root_project_dir
-        / "src"
-        / context.package_name
-        / "nodes"
-        / "hello_world.py"
-    )
-    assert "Hello World!" in converted_file.read_text()
-
-
 @given("I have micro-packaging settings in pyproject.toml")
 def add_micropkg_to_pyproject_toml(context: behave.runner.Context):
     pyproject_toml_path = context.root_project_dir / "pyproject.toml"
@@ -736,7 +741,27 @@ def add_micropkg_to_pyproject_toml(context: behave.runner.Context):
         file.write(project_toml_str)
 
 
+@given("I have executed the load_node magic command")
+@when("I execute the load_node magic command")
+def exec_magic_command(context):
+    """Execute Kedro target."""
+    cmd = [context.python, "ipython_script.py"]
+    context.result = run(
+        cmd, env=context.env, cwd=str(context.root_project_dir), print_output=True
+    )
+
+
 @given('I have changed the current working directory to "{dir}"')
 def change_dir(context, dir):
     """Execute Kedro target."""
     util.chdir(dir)
+
+
+@when("I install project and its dev dependencies")
+def pip_install_project_and_dev_dependencies(context):
+    """Install project and its development dependencies using pip."""
+    _ = run(
+        [context.pip, "install", ".[dev]"],
+        env=context.env,
+        cwd=str(context.root_project_dir),
+    )

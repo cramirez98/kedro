@@ -1,11 +1,14 @@
-"""This module contains unit test for the cli command 'kedro new'
-"""
+"""This module contains unit test for the cli command 'kedro new'"""
+
 from __future__ import annotations
 
+import logging
+import os
 import shutil
 from pathlib import Path
 
 import pytest
+import requests
 import toml
 import yaml
 from click.testing import CliRunner
@@ -18,9 +21,12 @@ from kedro.framework.cli.starters import (
     KedroStarterSpec,
     _convert_tool_short_names_to_numbers,
     _fetch_validate_parse_config_from_user_prompts,
+    _get_latest_starters_version,
+    _kedro_version_equal_or_lower_to_starters,
     _make_cookiecutter_args_and_fetch_template,
     _parse_tools_input,
     _parse_yes_no_to_bool,
+    _select_checkout_branch_for_cookiecutter,
     _validate_tool_selection,
 )
 
@@ -141,17 +147,11 @@ def _assert_requirements_ok(
     assert "Congratulations!" in result.output
     assert f"has been created in the directory \n{root_path}" in result.output
 
-    requirements_file_path = root_path / "requirements.txt"
     pyproject_file_path = root_path / "pyproject.toml"
 
     tools_list = _parse_tools_input(tools)
 
     if "1" in tools_list:
-        with open(requirements_file_path) as requirements_file:
-            requirements = requirements_file.read()
-
-        assert "ruff" in requirements
-
         pyproject_config = toml.load(pyproject_file_path)
         expected = {
             "tool": {
@@ -165,15 +165,11 @@ def _assert_requirements_ok(
             }
         }
         assert expected["tool"]["ruff"] == pyproject_config["tool"]["ruff"]
+        assert (
+            "ruff~=0.1.8" in pyproject_config["project"]["optional-dependencies"]["dev"]
+        )
 
     if "2" in tools_list:
-        with open(requirements_file_path) as requirements_file:
-            requirements = requirements_file.read()
-
-        assert "pytest-cov~=3.0" in requirements
-        assert "pytest-mock>=1.7.1, <2.0" in requirements
-        assert "pytest~=7.2" in requirements
-
         pyproject_config = toml.load(pyproject_file_path)
         expected = {
             "pytest": {
@@ -192,20 +188,32 @@ def _assert_requirements_ok(
         assert expected["pytest"] == pyproject_config["tool"]["pytest"]
         assert expected["coverage"] == pyproject_config["tool"]["coverage"]
 
+        assert (
+            "pytest-cov~=3.0"
+            in pyproject_config["project"]["optional-dependencies"]["dev"]
+        )
+        assert (
+            "pytest-mock>=1.7.1, <2.0"
+            in pyproject_config["project"]["optional-dependencies"]["dev"]
+        )
+        assert (
+            "pytest~=7.2" in pyproject_config["project"]["optional-dependencies"]["dev"]
+        )
+
     if "4" in tools_list:
         pyproject_config = toml.load(pyproject_file_path)
         expected = {
             "optional-dependencies": {
                 "docs": [
-                    "docutils<0.18.0",
-                    "sphinx~=3.4.3",
-                    "sphinx_rtd_theme==0.5.1",
+                    "docutils<0.21",
+                    "sphinx>=5.3,<7.3",
+                    "sphinx_rtd_theme==2.0.0",
                     "nbsphinx==0.8.1",
-                    "sphinx-autodoc-typehints==1.11.1",
-                    "sphinx_copybutton==0.3.1",
+                    "sphinx-autodoc-typehints==1.20.2",
+                    "sphinx_copybutton==0.5.2",
                     "ipykernel>=5.3, <7.0",
-                    "Jinja2<3.1.0",
-                    "myst-parser~=0.17.2",
+                    "Jinja2<3.2.0",
+                    "myst-parser>=1.0,<2.1",
                 ]
             }
         }
@@ -215,7 +223,6 @@ def _assert_requirements_ok(
         )
 
 
-# noqa: PLR0913
 def _assert_template_ok(
     result,
     tools="none",
@@ -819,9 +826,11 @@ class TestNewWithStarterValid:
         )
         kwargs = {
             "template": "git+https://github.com/kedro-org/kedro-starters.git",
-            "checkout": version,
             "directory": "spaceflights-pandas",
         }
+        starters_version = mock_determine_repo_dir.call_args[1].pop("checkout", None)
+
+        assert starters_version in [version, "main"]
         assert kwargs.items() <= mock_determine_repo_dir.call_args[1].items()
         assert kwargs.items() <= mock_cookiecutter.call_args[1].items()
 
@@ -847,11 +856,14 @@ class TestNewWithStarterValid:
             ["new", "--starter", "git+https://github.com/fake/fake.git"],
             input=_make_cli_prompt_input(),
         )
+
         kwargs = {
             "template": "git+https://github.com/fake/fake.git",
-            "checkout": version,
             "directory": None,
         }
+        starters_version = mock_determine_repo_dir.call_args[1].pop("checkout", None)
+
+        assert starters_version in [version, "main"]
         assert kwargs.items() <= mock_determine_repo_dir.call_args[1].items()
         del kwargs["directory"]
         assert kwargs.items() <= mock_cookiecutter.call_args[1].items()
@@ -893,11 +905,14 @@ class TestNewWithStarterValid:
             ],
             input=_make_cli_prompt_input(),
         )
+
         kwargs = {
             "template": "git+https://github.com/fake/fake.git",
-            "checkout": version,
             "directory": "my_directory",
         }
+        starters_version = mock_determine_repo_dir.call_args[1].pop("checkout", None)
+
+        assert starters_version in [version, "main"]
         assert kwargs.items() <= mock_determine_repo_dir.call_args[1].items()
         assert kwargs.items() <= mock_cookiecutter.call_args[1].items()
 
@@ -1687,3 +1702,237 @@ class TestTelemetryCLIFlag:
 
         telemetry_file_path = Path(repo_name + "/.telemetry")
         assert not telemetry_file_path.exists()
+
+
+@pytest.fixture
+def mock_env_vars(mocker):
+    """Fixture to mock environment variables"""
+    mocker.patch.dict(os.environ, {"GITHUB_TOKEN": "fake_token"}, clear=True)
+
+
+class TestGetLatestStartersVersion:
+    def test_get_latest_starters_version(self, mock_env_vars, requests_mock):
+        """Test _get_latest_starters_version when KEDRO_STARTERS_VERSION is not set"""
+        latest_version = "1.2.3"
+
+        # Mock the GitHub API response
+        requests_mock.get(
+            "https://api.github.com/repos/kedro-org/kedro-starters/releases/latest",
+            json={"tag_name": latest_version},
+            status_code=200,
+        )
+
+        result = _get_latest_starters_version()
+
+        assert result == latest_version
+        assert os.getenv("KEDRO_STARTERS_VERSION") == latest_version
+
+    def test_get_latest_starters_version_with_env_set(self, mocker):
+        """Test _get_latest_starters_version when KEDRO_STARTERS_VERSION is already set"""
+        expected_version = "1.2.3"
+        mocker.patch.dict(os.environ, {"KEDRO_STARTERS_VERSION": expected_version})
+
+        result = _get_latest_starters_version()
+
+        assert result == expected_version
+
+    def test_get_latest_starters_version_error(
+        self, mock_env_vars, requests_mock, caplog
+    ):
+        """Test _get_latest_starters_version when the request raises an exception"""
+        with caplog.at_level(logging.ERROR):
+            # Mock the request to raise a RequestException
+            requests_mock.get(
+                "https://api.github.com/repos/kedro-org/kedro-starters/releases/latest",
+                exc=requests.exceptions.RequestException("Request failed"),
+            )
+
+            result = _get_latest_starters_version()
+
+            assert result == ""
+            assert (
+                "Error fetching kedro-starters latest release version: Request failed"
+                in caplog.text
+            )
+
+
+class TestStartersVersionComparison:
+    def test_kedro_version_equal_or_lower_to_starters_equal(self, mocker):
+        """Test when version is equal to starters_version"""
+        mocker.patch(
+            "kedro.framework.cli.starters._get_latest_starters_version",
+            return_value="1.2.3",
+        )
+        version = "1.2.3"
+
+        result = _kedro_version_equal_or_lower_to_starters(version)
+        assert result is True
+
+    def test_kedro_version_equal_or_lower_to_starters_lower(self, mocker):
+        """Test when version is lower than starters_version"""
+        mocker.patch(
+            "kedro.framework.cli.starters._get_latest_starters_version",
+            return_value="1.3.0",
+        )
+        version = "1.2.3"
+
+        result = _kedro_version_equal_or_lower_to_starters(version)
+        assert result is True
+
+    def test_kedro_version_equal_or_lower_to_starters_higher(self, mocker):
+        """Test when version is higher than starters_version"""
+        mocker.patch(
+            "kedro.framework.cli.starters._get_latest_starters_version",
+            return_value="1.2.3",
+        )
+        version = "1.2.4"
+
+        result = _kedro_version_equal_or_lower_to_starters(version)
+        assert result is False
+
+
+class TestFetchCookiecutterArgsWhenKedroVersionDifferentFromStarters:
+    @pytest.fixture
+    def config(self):
+        return {
+            "tools": [],
+            "example_pipeline": "False",
+            "output_dir": "/my/output/dir",
+        }
+
+    def test_kedro_version_match_starters_true(self, config, mocker):
+        mocker.patch(
+            "kedro.framework.cli.starters._kedro_version_equal_or_lower_to_starters",
+            return_value=True,
+        )
+
+        config["tools"] = ["PySpark", "Kedro Viz"]
+        checkout = version
+        directory = "my-directory"
+        template_path = "my/template/path"
+
+        expected_args = {
+            "output_dir": "/my/output/dir",
+            "no_input": True,
+            "extra_context": config,
+            "checkout": version,
+            "directory": "spaceflights-pyspark-viz",
+        }
+        expected_path = "git+https://github.com/kedro-org/kedro-starters.git"
+
+        result_args, result_path = _make_cookiecutter_args_and_fetch_template(
+            config, checkout, directory, template_path
+        )
+
+        assert result_args == expected_args
+        assert result_path == expected_path
+
+    def test_kedro_version_match_starters_false(self, config, mocker):
+        mocker.patch(
+            "kedro.framework.cli.starters._kedro_version_equal_or_lower_to_starters",
+            return_value=False,
+        )
+
+        config["tools"] = ["PySpark", "Kedro Viz"]
+        checkout = "my-checkout"
+        directory = "my-directory"
+        template_path = "my/template/path"
+
+        expected_args = {
+            "output_dir": "/my/output/dir",
+            "no_input": True,
+            "extra_context": config,
+            "checkout": "my-checkout",
+            "directory": "spaceflights-pyspark-viz",
+        }
+        expected_path = "git+https://github.com/kedro-org/kedro-starters.git"
+
+        result_args, result_path = _make_cookiecutter_args_and_fetch_template(
+            config, checkout, directory, template_path
+        )
+
+        assert result_args == expected_args
+        assert result_path == expected_path
+
+    def test_no_tools_and_example_pipeline(self, config, mocker):
+        mocker.patch(
+            "kedro.framework.cli.starters._kedro_version_equal_or_lower_to_starters",
+            return_value=False,
+        )
+
+        config["tools"] = []
+        config["example_pipeline"] = "True"
+        checkout = "main"
+        directory = ""
+        template_path = "my/template/path"
+
+        expected_args = {
+            "output_dir": "/my/output/dir",
+            "no_input": True,
+            "extra_context": config,
+            "checkout": "main",
+            "directory": "spaceflights-pandas",
+        }
+        expected_path = "git+https://github.com/kedro-org/kedro-starters.git"
+
+        result_args, result_path = _make_cookiecutter_args_and_fetch_template(
+            config, checkout, directory, template_path
+        )
+
+        assert result_args == expected_args
+        assert result_path == expected_path
+
+    def test_no_tools_no_example_pipeline(self, config, mocker):
+        mocker.patch(
+            "kedro.framework.cli.starters._kedro_version_equal_or_lower_to_starters",
+            return_value=False,
+        )
+
+        config["tools"] = []
+        config["example_pipeline"] = "False"
+        checkout = "main"
+        directory = ""
+        template_path = "my/template/path"
+
+        expected_args = {
+            "output_dir": "/my/output/dir",
+            "no_input": True,
+            "extra_context": config,
+            "checkout": "main",
+        }
+        expected_path = "my/template/path"
+
+        result_args, result_path = _make_cookiecutter_args_and_fetch_template(
+            config, checkout, directory, template_path
+        )
+
+        assert result_args == expected_args
+        assert result_path == expected_path
+
+
+class TestSelectCheckoutBranch:
+    def test_select_checkout_branch_with_checkout(self):
+        checkout = "user_selected_branch"
+        result = _select_checkout_branch_for_cookiecutter(checkout)
+
+        assert result == checkout
+
+    def test_select_checkout_branch_kedro_version_equal_or_lower(self, mocker):
+        mocker.patch(
+            "kedro.framework.cli.starters._kedro_version_equal_or_lower_to_starters",
+            return_value=True,
+        )
+        checkout = None
+        result = _select_checkout_branch_for_cookiecutter(checkout)
+
+        assert result == version
+
+    def test_select_checkout_branch_main(self, mocker):
+        mocker.patch(
+            "kedro.framework.cli.starters._kedro_version_equal_or_lower_to_starters",
+            return_value=False,
+        )
+        checkout = None
+        result = _select_checkout_branch_for_cookiecutter(checkout)
+
+        assert result == "main"

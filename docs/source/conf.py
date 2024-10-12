@@ -70,7 +70,7 @@ templates_path = ["_templates"]
 intersphinx_mapping = {
     "kedro-viz": ("https://docs.kedro.org/projects/kedro-viz/en/v6.6.1/", None),
     "kedro-datasets": ("https://docs.kedro.org/projects/kedro-datasets/en/kedro-datasets-2.0.0/", None),
-    "cpython": ("https://docs.python.org/3.8/", None),
+    "cpython": ("https://docs.python.org/3.9/", None),
     "ipython": ("https://ipython.readthedocs.io/en/8.21.0/", None),
     "mlflow": ("https://www.mlflow.org/docs/2.12.1/", None),
     "kedro-mlflow": ("https://kedro-mlflow.readthedocs.io/en/0.12.2/", None),
@@ -127,11 +127,14 @@ type_targets = {
         "typing.Type",
         "typing.Set",
         "kedro.config.config.ConfigLoader",
+        "kedro.io.catalog_config_resolver.CatalogConfigResolver",
         "kedro.io.core.AbstractDataset",
         "kedro.io.core.AbstractVersionedDataset",
+        "kedro.io.core.CatalogProtocol",
         "kedro.io.core.DatasetError",
         "kedro.io.core.Version",
         "kedro.io.data_catalog.DataCatalog",
+        "kedro.io.kedro_data_catalog.KedroDataCatalog",
         "kedro.io.memory_dataset.MemoryDataset",
         "kedro.io.partitioned_dataset.PartitionedDataset",
         "kedro.pipeline.pipeline.Pipeline",
@@ -168,6 +171,9 @@ type_targets = {
         "D[k] if k in D, else d.  d defaults to None.",
         "None.  Update D from mapping/iterable E and F.",
         "Patterns",
+        "CatalogConfigResolver",
+        "CatalogProtocol",
+        "KedroDataCatalog",
     ),
     "py:data": (
         "typing.Any",
@@ -214,7 +220,9 @@ html_theme_options = {"collapse_navigation": False, "style_external_links": True
 
 # html_extra_path used to define a path to robots.txt which is used by webcrawlers
 # to ignore or allow certain links.
-html_extra_path = [str(here / "robots.txt")]
+# We've decided to rely on RTD's default robots.txt, so we no longer need to specify a custom one,
+# see discussion at https://github.com/kedro-org/kedro/issues/3741
+# html_extra_path = [str(here / "robots.txt")]
 
 # Removes, from all docs, the copyright footer.
 html_show_copyright = False
@@ -476,7 +484,7 @@ def autolink_classes_and_methods(lines):
             lines[i] = re.sub(existing, rf"{replacement}", lines[i])
 
 
-def autodoc_process_docstring(app, what, name, obj, options, lines):  # noqa: PLR0913
+def autodoc_process_docstring(app, what, name, obj, options, lines):
     try:
         # guarded method to make sure build never fails
         log_suggestions(lines, name)
@@ -486,7 +494,7 @@ def autodoc_process_docstring(app, what, name, obj, options, lines):  # noqa: PL
             style(
                 "Failed to check for class name mentions that can be "
                 f"converted to reStructuredText links in docstring of {name}. "
-                f"Error is: \n{str(e)}",
+                f"Error is: \n{e!s}",
                 fg="red",
             )
         )
@@ -515,7 +523,7 @@ except Exception as e:
         style(
             "Failed to create list of (regex, reStructuredText link "
             "replacement) for class names and method names in docstrings. "
-            f"Error is: \n{str(e)}",
+            f"Error is: \n{e!s}",
             fg="red",
         )
     )

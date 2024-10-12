@@ -6,7 +6,10 @@ This is a growing set of technical FAQs. The [product FAQs on the Kedro website]
 ## Installing Kedro
 * [How do I install a development version of Kedro](https://github.com/kedro-org/kedro/wiki/Guidelines-for-contributing-developers)?
 
-* **How can I check the version of Kedro installed?** To check the version installed, type `kedro -V` in your terminal window.
+* **How can I check the version of Kedro installed?**
+  To check the version installed, type `kedro -V` in your terminal window.
+* **Do I need Git installed to use Kedro?**
+  Yes, users are expected to have Git installed when working with Kedro. This is a prerequisite for the `kedro new` flow. If Git is not installed, use the following workaround: `kedro new -s https://github.com/kedro-org/kedro-starters/archive/0.18.6.zip --directory=pandas-iris`
 
 ## Kedro documentation
 * {doc}`Where can I find the documentation about Kedro-Viz<kedro-viz:kedro-viz_visualisation>`?
@@ -52,8 +55,8 @@ This is a growing set of technical FAQs. The [product FAQs on the Kedro website]
 
 ## Nodes and pipelines
 
-* [How do I create a modular pipeline](../nodes_and_pipelines/modular_pipelines.md#how-do-i-create-a-modular-pipeline)?
-
+* [How can I create a new blank pipeline](../nodes_and_pipelines/modular_pipelines.md#how-to-create-a-new-blank-pipeline-using-the-kedro-pipeline-create-command)?
+* [How can I reuse my pipelines](../nodes_and_pipelines/namespaces.md)?
 * [Can I use generator functions in a node](../nodes_and_pipelines/nodes.md#how-to-use-generator-functions-in-a-node)?
 
 ## What is data engineering convention?

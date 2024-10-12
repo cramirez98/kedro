@@ -1,11 +1,10 @@
 """Behave environment setup commands."""
-# noqa: unused-argument
+
 from __future__ import annotations
 
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
 import venv
 from pathlib import Path
@@ -65,7 +64,7 @@ def _setup_context_with_venv(context, venv_dir):
     path = context.env["PATH"].split(os.pathsep)
     path = [p for p in path if not (Path(p).parent / "pyvenv.cfg").is_file()]
     path = [p for p in path if not (Path(p).parent / "conda-meta").is_dir()]
-    path = [str(bin_dir)] + path
+    path = [str(bin_dir), *path]
     context.env["PATH"] = os.pathsep.join(path)
 
     # Create an empty pip.conf file and point pip to it
@@ -97,9 +96,8 @@ def _create_tmp_dir() -> Path:
 
 def _setup_minimal_env(context):
     if os.environ.get("BEHAVE_LOCAL_ENV"):
-        output = subprocess.check_output(
-            ["which", "kedro"]  # noqa: S603, S607
-        )  # equivalent run "which kedro"
+        # equivalent run "which kedro"
+        output = subprocess.check_output(["which", "kedro"])  # noqa: S603, S607
         output = output.strip().decode("utf8")
         kedro_install_venv_dir = Path(output).parent.parent
         context.kedro_install_venv_dir = kedro_install_venv_dir
@@ -132,11 +130,6 @@ def _install_project_requirements(context):
         .splitlines()
     )
     install_reqs = [req for req in install_reqs if "{" not in req and "#" not in req]
-    # For Python versions 3.9 and above we use the new dataset dependency format introduced in `kedro-datasets` 3.0.0
-    if sys.version_info.minor > MINOR_PYTHON_38_VERSION:
-        install_reqs.append("kedro-datasets[pandas-csvdataset]")
-    # For Python 3.8 we use the older `kedro-datasets` dependency format
-    else:
-        install_reqs.append("kedro-datasets[pandas.CSVDataset]")
+    install_reqs.append("kedro-datasets[pandas-csvdataset]")
     call([context.pip, "install", *install_reqs], env=context.env)
     return context

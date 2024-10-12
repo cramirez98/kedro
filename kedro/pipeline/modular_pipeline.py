@@ -1,14 +1,19 @@
 """Helper to integrate modular pipelines into a master pipeline."""
+
 from __future__ import annotations
 
 import copy
 import difflib
-from typing import AbstractSet, Iterable
+from typing import TYPE_CHECKING
 
-from kedro.pipeline.node import Node
 from kedro.pipeline.pipeline import Pipeline
 
 from .transcoding import TRANSCODING_SEPARATOR, _strip_transcoding, _transcode_split
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Set
+
+    from kedro.pipeline.node import Node
 
 
 class ModularPipelineError(Exception):
@@ -32,7 +37,7 @@ def _is_parameter(name: str) -> bool:
 
 
 def _validate_inputs_outputs(
-    inputs: AbstractSet[str], outputs: AbstractSet[str], pipe: Pipeline
+    inputs: Set[str], outputs: Set[str], pipe: Pipeline
 ) -> None:
     """Safeguards to ensure that:
     - parameters are not specified under inputs
@@ -61,9 +66,9 @@ def _validate_inputs_outputs(
 
 
 def _validate_datasets_exist(
-    inputs: AbstractSet[str],
-    outputs: AbstractSet[str],
-    parameters: AbstractSet[str],
+    inputs: Set[str],
+    outputs: Set[str],
+    parameters: Set[str],
     pipe: Pipeline,
 ) -> None:
     """Validate that inputs, parameters and outputs map correctly onto the provided nodes."""

@@ -23,7 +23,7 @@ logger.debug("Useful information for debugging")
 You can use Rich's [console markup](https://rich.readthedocs.io/en/stable/markup.html) in your logging calls:
 
 ```python
-log.error("[bold red blink]Important error message![/]", extra={"markup": True})
+logger.error("[bold red blink]Important error message![/]", extra={"markup": True})
 ```
 
 ## How to customise Kedro logging
@@ -40,6 +40,21 @@ After setting the environment variable, any subsequent Kedro commands use the lo
 
 ```{note}
 If the `KEDRO_LOGGING_CONFIG` environment variable is not set, Kedro will use the [default logging configuration](https://github.com/kedro-org/kedro/blob/main/kedro/framework/project/default_logging.yml).
+```
+
+### Change the verbosity of specific parts of Kedro
+
+You can also customise logging at runtime and redefine the logging configuration provided in the `logging.yml` when using jupyter notebook.
+The example below demonstrates how you can change the logging level from default `INFO` to `WARNING` for the `kedro.io.data_catalog` component logger specifically, the logging for the rest of the components will remain unchanged.
+The same can be done for higher/lower-level components without affecting the top-level.
+
+Add the following to a cell in your notebook:
+
+```ipython
+import logging
+
+
+logging.getLogger("kedro.io.data_catalog").setLevel(logging.WARNING)
 ```
 
 ## Custom `CONF_SOURCE` with logging

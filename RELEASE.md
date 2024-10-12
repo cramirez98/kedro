@@ -1,14 +1,104 @@
-# Upcoming Release 0.19.7
+# Upcoming Release
 
 ## Major features and improvements
+## Bug fixes and other changes
+## Breaking changes to the API
+## Documentation changes
+## Community contributions
+
+
+# Release 0.19.9
+
+## Major features and improvements
+* Dropped Python 3.8 support.
+* Implemented `KedroDataCatalog` repeating `DataCatalog` functionality with a few API enhancements:
+  * Removed `_FrozenDatasets` and access datasets as properties;
+  * Added get dataset by name feature;
+  * `add_feed_dict()` was simplified to only add raw data;
+  * Datasets' initialisation was moved out from `from_config()` method to the constructor.
+* Moved development requirements from `requirements.txt` to the dedicated section in `pyproject.toml` for project template.
+* Implemented `Protocol` abstraction for the current `DataCatalog` and adding new catalog implementations.
+* Refactored `kedro run` and `kedro catalog` commands.
+* Moved pattern resolution logic from `DataCatalog` to a separate component - `CatalogConfigResolver`. Updated `DataCatalog` to use `CatalogConfigResolver` internally.
+* Made packaged Kedro projects return `session.run()` output to be used when running it in the interactive environment.
+* Enhanced `OmegaConfigLoader` configuration validation to detect duplicate keys at all parameter levels, ensuring comprehensive nested key checking.
+
+**Note:** ``KedroDataCatalog`` is an experimental feature and is under active development. Therefore, it is possible we'll introduce breaking changes to this class, so be mindful of that if you decide to use it already. Let us know if you have any feedback about the ``KedroDataCatalog`` or ideas for new features.
 
 ## Bug fixes and other changes
+* Fixed bug where using dataset factories breaks with `ThreadRunner`.
+* Fixed a bug where `SharedMemoryDataset.exists` would not call the underlying `MemoryDataset`.
+* Fixed template projects example tests.
+* Made credentials loading consistent between `KedroContext._get_catalog()` and `resolve_patterns` so that both use `_get_config_credentials()`
+
+## Breaking changes to the API
+* Removed `ShelveStore` to address a security vulnerability.
+
+## Documentation changes
+* Fix logo on PyPI page.
+* Minor language/styling updates.
+
+## Community contributions
+* [Puneet](https://github.com/puneeter)
+* [ethanknights](https://github.com/ethanknights)
+* [Manezki](https://github.com/Manezki)
+* [MigQ2](https://github.com/MigQ2)
+* [Felix Scherz](https://github.com/felixscherz)
+* [Yu-Sheng Li](https://github.com/kevin1kevin1k)
+
+# Release 0.19.8
+
+## Major features and improvements
+* Made default run entrypoint in `__main__.py` work in interactive environments such as IPyhon and Databricks.
+
+## Bug fixes and other changes
+* Fixed a bug that caused tracebacks disappeared from CLI runs.
+* Moved `_find_run_command()` and `_find_run_command_in_plugins()` from `__main__.py` in the project template to the framework itself.
+* Fixed a bug where `%load_node` breaks with multi-lines import statements.
+* Fixed a regression where `rich` mark up logs stop showing since 0.19.7.
 
 ## Breaking changes to the API
 
 ## Documentation changes
+* Add clarifications in docs explaining how runtime parameter resolution works.
 
 ## Community contributions
+Many thanks to the following Kedroids for contributing PRs to this release:
+* [cclauss](https://github.com/cclauss)
+* [eltociear](https://github.com/eltociear)
+* [ltalirz](https://github.com/ltalirz)
+
+# Release 0.19.7
+
+## Major features and improvements
+* Exposed `load` and `save` publicly for each dataset in the core `kedro` library, and enabled other datasets to do the same. If a dataset doesn't expose `load` or `save` publicly, Kedro will fall back to using `_load` or `_save`, respectively.
+* Kedro commands are now lazily loaded to add performance gains when running Kedro commands.
+* Implemented key completion support for accessing datasets in the `DataCatalog`.
+* Implemented dataset pretty printing.
+* Implemented `DataCatalog` pretty printing.
+* Moved to an opt-out model for telemetry, enabling it by default without requiring prior consent.
+
+## Bug fixes and other changes
+* Updated error message for invalid catalog entries.
+* Updated error message for catalog entries when the dataset class is not found with hints on how to resolve the issue.
+* Fixed a bug in the `DataCatalog` `shallow_copy()` method to ensure it returns the type of the used catalog and doesn't cast it to `DataCatalog`.
+* Made [kedro-telemetry](https://github.com/kedro-org/kedro-plugins/tree/main/kedro-telemetry) a core dependency.
+* Fixed a bug when `OmegaConfigLoader` is printed, there are few missing arguments.
+* Fixed a bug when where iterating `OmegaConfigLoader`'s `keys` return empty dictionary.
+
+## Breaking changes to the API
+
+## Upcoming deprecations for Kedro 0.20.0
+* The utility method `get_pkg_version()` is deprecated and will be removed in Kedro 0.20.0.
+
+## Documentation changes
+* Improved documentation for configuring dataset parameters in the data catalog
+* Extended documentation with an example of logging customisation at runtime
+
+## Community contributions
+Many thanks to the following Kedroids for contributing PRs to this release:
+* [nickolasrm](https://github.com/nickolasrm)
+* [yury-fedotov](https://github.com/yury-fedotov)
 
 # Release 0.19.6
 
@@ -43,7 +133,8 @@ Many thanks to the following Kedroids for contributing PRs to this release:
 ## Documentation changes
 * Updated the documentation for deploying a Kedro project with Astronomer Airflow.
 * Used `kedro-sphinx-theme` for documentation.
-
+* Add mentions about correct usage of `configure_project` with `multiprocessing`.
+*
 # Release 0.19.4
 
 ## Major features and improvements
@@ -72,6 +163,7 @@ Many thanks to the following Kedroids for contributing PRs to this release:
 * Added documentation on best practices for testing nodes and pipelines.
 * Clarified docs around using custom resolvers without a full Kedro project.
 
+
 ## Community contributions
 Many thanks to the following Kedroids for contributing PRs to this release:
 * [ondrejzacha](https://github.com/ondrejzacha)
@@ -82,7 +174,7 @@ Many thanks to the following Kedroids for contributing PRs to this release:
 ## Major features and improvements
 * Create the debugging line magic `%load_node` for Jupyter Notebook and Jupyter Lab.
 * Add official support for Python 3.12.
-* Add better IPython, VSCode Notebook support for `%load_node` and minimal support for Databricks.
+* Add better IPython, VS Code Notebook support for `%load_node` and minimal support for Databricks.
 * Add full Kedro Node input syntax for `%load_node`.
 
 ## Bug fixes and other changes

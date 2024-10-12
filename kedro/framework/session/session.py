@@ -1,4 +1,5 @@
 """This module implements Kedro session responsible for project lifecycle."""
+
 from __future__ import annotations
 
 import getpass
@@ -10,14 +11,11 @@ import sys
 import traceback
 from copy import deepcopy
 from pathlib import Path
-from timeit import default_timer
-from typing import Any, Iterable
+from typing import TYPE_CHECKING, Any
 
 import click
 
 from kedro import __version__ as kedro_version
-from kedro.config import AbstractConfigLoader
-from kedro.framework.context import KedroContext
 from kedro.framework.hooks import _create_hook_manager
 from kedro.framework.hooks.manager import _register_hooks, _register_hooks_entry_points
 from kedro.framework.project import (
@@ -25,23 +23,29 @@ from kedro.framework.project import (
     settings,
     validate_settings,
 )
-from kedro.framework.session.store import BaseSessionStore
 from kedro.io.core import generate_timestamp
-from kedro.runner import AbstractRunner, SequentialRunner
+from kedro.runner import AbstractRunner, SequentialRunner, ThreadRunner
 from kedro.utils import _find_kedro_project
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from kedro.config import AbstractConfigLoader
+    from kedro.framework.context import KedroContext
+    from kedro.framework.session.store import BaseSessionStore
 
 
 def _describe_git(project_path: Path) -> dict[str, dict[str, Any]]:
     path = str(project_path)
     try:
-        res = subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"],  # noqa: S603, S607
+        res = subprocess.check_output(  # noqa: S603
+            ["git", "rev-parse", "--short", "HEAD"],  # noqa: S607
             cwd=path,
             stderr=subprocess.STDOUT,
         )
         git_data: dict[str, Any] = {"commit_sha": res.decode().strip()}
-        git_status_res = subprocess.check_output(
-            ["git", "status", "--short"],  # noqa: S603, S607
+        git_status_res = subprocess.check_output(  # noqa: S603
+            ["git", "status", "--short"],  # noqa: S607
             cwd=path,
             stderr=subprocess.STDOUT,
         )
@@ -98,7 +102,7 @@ class KedroSession:
 
     """
 
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
         session_id: str,
         package_name: str | None = None,
@@ -125,7 +129,7 @@ class KedroSession:
         )
 
     @classmethod
-    def create(  # noqa: PLR0913
+    def create(
         cls,
         project_path: Path | str | None = None,
         save_on_close: bool = True,
@@ -335,7 +339,7 @@ class KedroSession:
         save_version = session_id
         extra_params = self.store.get("extra_params") or {}
         context = self.load_context()
-        start_time_pipe_creation = default_timer()
+
         name = pipeline_name or "__default__"
 
         try:
@@ -346,9 +350,7 @@ class KedroSession:
                 f"It needs to be generated and returned "
                 f"by the 'register_pipelines' function."
             ) from exc
-        self._logger.info("FINISHED pipeline creation in %.2f seconds", default_timer() - start_time_pipe_creation)
 
-        start_time = default_timer()
         filtered_pipeline = pipeline.filter(
             tags=tags,
             from_nodes=from_nodes,
@@ -358,7 +360,6 @@ class KedroSession:
             to_outputs=to_outputs,
             node_namespace=namespace,
         )
-        self._logger.info("Finished filtering pipeline in %.2f seconds", default_timer() - start_time)
 
         record_data = {
             "session_id": session_id,
@@ -378,13 +379,10 @@ class KedroSession:
             "runner": getattr(runner, "__name__", str(runner)),
         }
 
-        self._logger.info("Creating catalog...")
-        start_time = default_timer()
         catalog = context._get_catalog(
             save_version=save_version,
             load_versions=load_versions,
         )
-        self._logger.info("Finished creating catalog in %.2f seconds", default_timer() - start_time)
 
         # Run the runner
         hook_manager = self._hook_manager
@@ -398,6 +396,10 @@ class KedroSession:
             run_params=record_data, pipeline=filtered_pipeline, catalog=catalog
         )
 
+        if isinstance(runner, ThreadRunner):
+            for ds in filtered_pipeline.datasets():
+                if catalog.config_resolver.match_pattern(ds):
+                    _ = catalog._get_dataset(ds)
         try:
             run_result = runner.run(
                 filtered_pipeline, catalog, hook_manager, session_id

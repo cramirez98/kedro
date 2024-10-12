@@ -1,7 +1,9 @@
 """Utilities for use with click."""
+
 from __future__ import annotations
 
 import difflib
+import importlib
 import logging
 import re
 import shlex
@@ -11,15 +13,22 @@ import sys
 import textwrap
 import traceback
 import typing
+import warnings
 from collections import defaultdict
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Sequence
 from importlib import import_module
 from itertools import chain
 from pathlib import Path
-from typing import IO, Any, Iterable, Sequence
+from typing import IO, Any, Callable
 
 import click
 import importlib_metadata
 from omegaconf import OmegaConf
+
+from kedro import KedroDeprecationWarning
 
 CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 MAX_SUGGESTIONS = 3
@@ -50,7 +59,7 @@ def call(cmd: list[str], **kwargs: Any) -> None:  # pragma: no cover
     Raises:
         click.exceptions.Exit: If `subprocess.run` returns non-zero code.
     """
-    click.echo(" ".join(shlex.quote(c) for c in cmd))
+    click.echo(shlex.join(cmd))
     code = subprocess.run(cmd, **kwargs).returncode  # noqa: PLW1510, S603
     if code:
         raise click.exceptions.Exit(code=code)
@@ -60,7 +69,7 @@ def python_call(
     module: str, arguments: Iterable[str], **kwargs: Any
 ) -> None:  # pragma: no cover
     """Run a subprocess command that invokes a Python module."""
-    call([sys.executable, "-m", module] + list(arguments), **kwargs)
+    call([sys.executable, "-m", module, *list(arguments)], **kwargs)
 
 
 def find_stylesheets() -> Iterable[str]:  # pragma: no cover
@@ -117,14 +126,12 @@ class CommandCollection(click.CommandCollection):
             for title, cli_list in groups
         ]
         sources = list(chain.from_iterable(cli_list for _, cli_list in self.groups))
-
         help_texts = [
             cli.help
             for cli_collection in sources
             for cli in cli_collection.sources
             if cli.help
         ]
-        self._dedupe_commands(sources)
         super().__init__(
             sources=sources,  # type: ignore[arg-type]
             help="\n\n".join(help_texts),
@@ -132,29 +139,6 @@ class CommandCollection(click.CommandCollection):
         )
         self.params = sources[0].params
         self.callback = sources[0].callback
-
-    @staticmethod
-    def _dedupe_commands(cli_collections: Sequence[click.CommandCollection]) -> None:
-        """Deduplicate commands by keeping the ones from the last source
-        in the list.
-        """
-        seen_names: set[str] = set()
-        for cli_collection in reversed(cli_collections):
-            for cmd_group in reversed(cli_collection.sources):
-                cmd_group.commands = {  # type: ignore[attr-defined]
-                    cmd_name: cmd
-                    for cmd_name, cmd in cmd_group.commands.items()  # type: ignore[attr-defined]
-                    if cmd_name not in seen_names
-                }
-                seen_names |= cmd_group.commands.keys()  # type: ignore[attr-defined]
-
-        # remove empty command groups
-        for cli_collection in cli_collections:
-            cli_collection.sources = [
-                cmd_group
-                for cmd_group in cli_collection.sources
-                if cmd_group.commands  # type: ignore[attr-defined]
-            ]
 
     @staticmethod
     def _merge_same_name_collections(
@@ -166,7 +150,6 @@ class CommandCollection(click.CommandCollection):
             named_groups[group.name].append(group)  # type: ignore[index]
             if group.help:
                 helps[group.name].append(group.help)  # type: ignore[index]
-
         return [
             click.CommandCollection(
                 name=group_name,
@@ -218,6 +201,10 @@ def get_pkg_version(reqs_path: (str | Path), package_name: str) -> str:
         KedroCliError: If the file specified in ``reqs_path`` does not exist
             or ``package_name`` was not found in that file.
     """
+    warnings.warn(
+        "`get_pkg_version()` has been deprecated and will be removed in Kedro 0.20.0",
+        KedroDeprecationWarning,
+    )
     reqs_path = Path(reqs_path).absolute()
     if not reqs_path.is_file():
         raise KedroCliError(f"Given path '{reqs_path}' is not a regular file.")
@@ -407,6 +394,47 @@ def load_entry_points(name: str) -> Sequence[click.MultiCommand]:
     return entry_point_commands
 
 
+def find_run_command(package_name: str) -> Callable:
+    """Find the run command to be executed.
+       This is either the default run command defined in the Kedro framework or a run command defined by
+       an installed plugin.
+
+    Args:
+        package_name: The name of the package being run.
+
+    Raises:
+        KedroCliError: If the run command is not found.
+
+    Returns:
+        Run command to be executed.
+    """
+    try:
+        project_cli = importlib.import_module(f"{package_name}.cli")
+        # fail gracefully if cli.py does not exist
+    except ModuleNotFoundError as exc:
+        if f"{package_name}.cli" not in str(exc):
+            raise
+        plugins = load_entry_points("project")
+        run = _find_run_command_in_plugins(plugins) if plugins else None
+        if run:
+            # use run command from installed plugin if it exists
+            return run  # type: ignore[no-any-return]
+        # use run command from `kedro.framework.cli.project`
+        from kedro.framework.cli.project import run
+
+        return run  # type: ignore[no-any-return]
+    # fail badly if cli.py exists, but has no `cli` in it
+    if not hasattr(project_cli, "cli"):
+        raise KedroCliError(f"Cannot load commands from {package_name}.cli")
+    return project_cli.run  # type: ignore[no-any-return]
+
+
+def _find_run_command_in_plugins(plugins: Any) -> Any:
+    for group in plugins:
+        if "run" in group.commands:
+            return group.commands["run"]
+
+
 @typing.no_type_check
 def _config_file_callback(ctx: click.Context, param: Any, value: Any) -> Any:
     """CLI callback that replaces command line options
@@ -419,7 +447,7 @@ def _config_file_callback(ctx: click.Context, param: Any, value: Any) -> Any:
 
     if value:
         config = OmegaConf.to_container(OmegaConf.load(value))[section]
-        for key, value in config.items():
+        for key, value in config.items():  # noqa: PLR1704
             _validate_config_file(key)
         ctx.default_map.update(config)
 
@@ -497,3 +525,42 @@ def _split_load_versions(ctx: click.Context, param: Any, value: str) -> dict[str
         load_versions_dict[load_version_list[0]] = load_version_list[1]
 
     return load_versions_dict
+
+
+class LazyGroup(click.Group):
+    """A click Group that supports lazy loading of subcommands."""
+
+    def __init__(
+        self,
+        *args: Any,
+        lazy_subcommands: dict[str, str] | None = None,
+        **kwargs: Any,
+    ):
+        super().__init__(*args, **kwargs)
+        # lazy_subcommands is a map of the form:
+        #
+        #   {command-name} -> {module-name}.{command-object-name}
+        #
+        self.lazy_subcommands = lazy_subcommands or {}
+
+    def list_commands(self, ctx: click.Context) -> list[str]:
+        base = list(super().list_commands(ctx))
+        lazy = sorted(self.lazy_subcommands.keys())
+        return base + lazy
+
+    def get_command(  # type: ignore[override]
+        self, ctx: click.Context, cmd_name: str
+    ) -> click.BaseCommand | click.Command | None:
+        if cmd_name in self.lazy_subcommands:
+            return self._lazy_load(cmd_name)
+        return super().get_command(ctx, cmd_name)
+
+    def _lazy_load(self, cmd_name: str) -> click.BaseCommand:
+        # lazily loading a command, first get the module name and attribute name
+        import_path = self.lazy_subcommands[cmd_name]
+        modname, cmd_object_name = import_path.rsplit(".", 1)
+        # do the import
+        mod = import_module(modname)
+        # get the Command object from that module
+        cmd_object = getattr(mod, cmd_object_name)
+        return cmd_object  # type: ignore[no-any-return]

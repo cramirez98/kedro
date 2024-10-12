@@ -7,11 +7,11 @@ If you can't find the answer you need here, [ask the Kedro community for help](h
 ## How do I resolve these common errors?
 
 ### Dataset errors
-#### DatasetError: Failed while loading data from data set
+#### DatasetError: Failed while loading data from dataset
 You're [testing whether Kedro can load the raw test data](./set_up_data.md#test-that-kedro-can-load-the-data) and see the following:
 
 ```python
-DatasetError: Failed while loading data from data set
+DatasetError: Failed while loading data from dataset
 CSVDataset(filepath=...).
 [Errno 2] No such file or directory: '.../companies.csv'
 ```
@@ -43,7 +43,7 @@ DatasetError: An exception occurred when parsing config for Dataset
 'data_processing.preprocessed_companies':
 Object 'ParquetDataset' cannot be loaded from 'kedro_datasets.pandas'. Please see the
 documentation on how to install relevant dependencies for kedro_datasets.pandas.ParquetDataset:
-https://kedro.readthedocs.io/en/stable/kedro_project_setup/dependencies.html
+https://docs.kedro.org/en/stable/kedro_project_setup/dependencies.html
 ```
 
 The Kedro Data Catalog is missing [dependencies needed to parse the data](../kedro_project_setup/dependencies.md#install-dependencies-related-to-the-data-catalog). Check that you have [all the project dependencies to `requirements.txt`](./tutorial_template.md#install-project-dependencies) and then call `pip install -r requirements.txt` to install them.
@@ -71,6 +71,6 @@ The above exception was the direct cause of the following exception:
 Traceback (most recent call last):
   ...
     raise DatasetError(message) from exc
-kedro.io.core.DatasetError: Failed while loading data from data set CSVDataset(filepath=data/03_primary/model_input_table.csv, save_args={'index': False}).
+kedro.io.core.DatasetError: Failed while loading data from dataset CSVDataset(filepath=data/03_primary/model_input_table.csv, save_args={'index': False}).
 [Errno 2] File b'data/03_primary/model_input_table.csv' does not exist: b'data/03_primary/model_input_table.csv'
 ```

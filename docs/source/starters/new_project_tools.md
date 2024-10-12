@@ -44,7 +44,7 @@ To skip this step in future use --tools
 To find out more: https://docs.kedro.org/en/stable/starters/new_project_tools.html
 
 Tools
-1) Lint: Basic linting with Black and Ruff
+1) Lint: Basic linting with Ruff
 2) Test: Basic testing with pytest
 3) Log: Additional, environment-specific logging options
 4) Docs: A Sphinx documentation setup
@@ -65,8 +65,7 @@ A list of available tools can also be accessed by running `kedro new --help`
 
                       Tools
 
-                      1) Linting: Provides a basic linting setup with Black
-                      and Ruff
+                      1) Linting: Provides a basic linting setup with Ruff
 
                       2) Testing: Provides basic testing setup with pytest
 
@@ -153,6 +152,10 @@ kedro new --config=<path/to/config.yml>
 Note: When using a configuration file to create a new project, you must provide values for the project name, repository name, and package names. Specifying your tools selection is optional, omitting them results in the default selection of `none`.
 ```
 
+``` {note}
+When the `--config` flag is used together with `--name`, `--tools`, or `--example`, the values provided directly on the CLI will overwrite those specified in the configuration file.
+```
+
 ## Kedro tools
 
 Tools in Kedro serve as modular functionalities that enhance a foundational project template. They provide a means to tailor your Kedro project to meet your unique requirements. When creating a new project, you may select one or more of the available tools, or none at all.
@@ -161,7 +164,7 @@ The available tools include: [linting](#linting), [testing](#testing), [custom l
 
 ### Linting
 
-The Kedro linting tool introduces [`black`](https://black.readthedocs.io/en/stable/index.html) and [`ruff`](https://docs.astral.sh/ruff/) as dependencies in your new project's requirements. After project creation, make sure these are installed by running the following command from the project root:
+The Kedro linting tool introduces [`ruff`](https://docs.astral.sh/ruff/) as dependency in your new project's requirements. After project creation, make sure these are installed by running the following command from the project root:
 
 ```bash
 pip install -r requirements.txt
@@ -171,7 +174,6 @@ The linting tool will configure `ruff` with the following settings by default:
 ```toml
 #pyproject.toml
 
-[tool.ruff]
 line-length = 88
 show-fixes = true
 select = [
@@ -183,7 +185,7 @@ select = [
     "PL",  # Pylint
     "T201", # Print Statement
 ]
-ignore = ["E501"]  # Black takes care of line-too-long
+ignore = ["E501"]  # Ruff format takes care of line-too-long
 ```
 
 With these installed, you can then make use of the following commands to format and lint your code:

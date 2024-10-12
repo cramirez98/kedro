@@ -1,6 +1,7 @@
 """``ParallelRunner`` is an ``AbstractRunner`` implementation. It can
 be used to run the ``Pipeline`` in parallel groups formed by toposort.
 """
+
 from __future__ import annotations
 
 import multiprocessing
@@ -12,9 +13,7 @@ from itertools import chain
 from multiprocessing.managers import BaseProxy, SyncManager
 from multiprocessing.reduction import ForkingPickler
 from pickle import PicklingError
-from typing import Any, Iterable
-
-from pluggy import PluginManager
+from typing import TYPE_CHECKING, Any
 
 from kedro.framework.hooks.manager import (
     _create_hook_manager,
@@ -23,14 +22,20 @@ from kedro.framework.hooks.manager import (
 )
 from kedro.framework.project import settings
 from kedro.io import (
-    DataCatalog,
+    CatalogProtocol,
     DatasetNotFoundError,
     MemoryDataset,
     SharedMemoryDataset,
 )
-from kedro.pipeline import Pipeline
-from kedro.pipeline.node import Node
 from kedro.runner.runner import AbstractRunner, run_node
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from pluggy import PluginManager
+
+    from kedro.pipeline import Pipeline
+    from kedro.pipeline.node import Node
 
 # see https://github.com/python/cpython/blob/master/Lib/concurrent/futures/process.py#L114
 _MAX_WINDOWS_WORKERS = 61
@@ -38,7 +43,7 @@ _MAX_WINDOWS_WORKERS = 61
 
 class ParallelRunnerManager(SyncManager):
     """``ParallelRunnerManager`` is used to create shared ``MemoryDataset``
-    objects as default data sets in a pipeline.
+    objects as default datasets in a pipeline.
     """
 
 
@@ -57,7 +62,7 @@ def _bootstrap_subprocess(
 
 def _run_node_synchronization(  # noqa: PLR0913
     node: Node,
-    catalog: DataCatalog,
+    catalog: CatalogProtocol,
     is_async: bool = False,
     session_id: str | None = None,
     package_name: str | None = None,
@@ -70,7 +75,7 @@ def _run_node_synchronization(  # noqa: PLR0913
 
     Args:
         node: The ``Node`` to run.
-        catalog: A ``DataCatalog`` containing the node's inputs and outputs.
+        catalog: An implemented instance of ``CatalogProtocol`` containing the node's inputs and outputs.
         is_async: If True, the node inputs and outputs are loaded and saved
             asynchronously with threads. Defaults to False.
         session_id: The session id of the pipeline run.
@@ -115,7 +120,7 @@ class ParallelRunner(AbstractRunner):
                 cannot be larger than 61 and will be set to min(61, max_workers).
             is_async: If True, the node inputs and outputs are loaded and saved
                 asynchronously with threads. Defaults to False.
-            extra_dataset_patterns: Extra dataset factory patterns to be added to the DataCatalog
+            extra_dataset_patterns: Extra dataset factory patterns to be added to the catalog
                 during the run. This is used to set the default datasets to SharedMemoryDataset
                 for `ParallelRunner`.
 
@@ -165,9 +170,9 @@ class ParallelRunner(AbstractRunner):
             )
 
     @classmethod
-    def _validate_catalog(cls, catalog: DataCatalog, pipeline: Pipeline) -> None:
-        """Ensure that all data sets are serialisable and that we do not have
-        any non proxied memory data sets being used as outputs as their content
+    def _validate_catalog(cls, catalog: CatalogProtocol, pipeline: Pipeline) -> None:
+        """Ensure that all datasets are serialisable and that we do not have
+        any non proxied memory datasets being used as outputs as their content
         will not be synchronized across threads.
         """
 
@@ -185,9 +190,9 @@ class ParallelRunner(AbstractRunner):
 
         if unserialisable:
             raise AttributeError(
-                f"The following data sets cannot be used with multiprocessing: "
+                f"The following datasets cannot be used with multiprocessing: "
                 f"{sorted(unserialisable)}\nIn order to utilize multiprocessing you "
-                f"need to make sure all data sets are serialisable, i.e. data sets "
+                f"need to make sure all datasets are serialisable, i.e. datasets "
                 f"should not make use of lambda functions, nested functions, closures "
                 f"etc.\nIf you are using custom decorators ensure they are correctly "
                 f"decorated using functools.wraps()."
@@ -204,13 +209,15 @@ class ParallelRunner(AbstractRunner):
 
         if memory_datasets:
             raise AttributeError(
-                f"The following data sets are memory data sets: "
+                f"The following datasets are memory datasets: "
                 f"{sorted(memory_datasets)}\n"
                 f"ParallelRunner does not support output to externally created "
                 f"MemoryDatasets"
             )
 
-    def _set_manager_datasets(self, catalog: DataCatalog, pipeline: Pipeline) -> None:
+    def _set_manager_datasets(
+        self, catalog: CatalogProtocol, pipeline: Pipeline
+    ) -> None:
         for dataset in pipeline.datasets():
             try:
                 catalog.exists(dataset)
@@ -237,7 +244,7 @@ class ParallelRunner(AbstractRunner):
     def _run(
         self,
         pipeline: Pipeline,
-        catalog: DataCatalog,
+        catalog: CatalogProtocol,
         hook_manager: PluginManager,
         session_id: str | None = None,
     ) -> None:
@@ -245,7 +252,7 @@ class ParallelRunner(AbstractRunner):
 
         Args:
             pipeline: The ``Pipeline`` to run.
-            catalog: The ``DataCatalog`` from which to fetch data.
+            catalog: An implemented instance of ``CatalogProtocol`` from which to fetch data.
             hook_manager: The ``PluginManager`` to activate hooks.
             session_id: The id of the session.
 

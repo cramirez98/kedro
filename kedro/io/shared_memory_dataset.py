@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import pickle
-from multiprocessing.managers import SyncManager
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from kedro.io.core import AbstractDataset, DatasetError
+
+if TYPE_CHECKING:
+    from multiprocessing.managers import SyncManager
 
 
 class SharedMemoryDataset(AbstractDataset):
@@ -34,10 +36,10 @@ class SharedMemoryDataset(AbstractDataset):
             raise AttributeError()
         return getattr(self.shared_memory_dataset, name)  # pragma: no cover
 
-    def _load(self) -> Any:
+    def load(self) -> Any:
         return self.shared_memory_dataset.load()
 
-    def _save(self, data: Any) -> None:
+    def save(self, data: Any) -> None:
         """Calls save method of a shared MemoryDataset in SyncManager."""
         try:
             self.shared_memory_dataset.save(data)
@@ -47,7 +49,7 @@ class SharedMemoryDataset(AbstractDataset):
                 pickle.dumps(data)
             except Exception as serialisation_exc:  # SKIP_IF_NO_SPARK
                 raise DatasetError(
-                    f"{str(data.__class__)} cannot be serialised. ParallelRunner "
+                    f"{data.__class__!s} cannot be serialised. ParallelRunner "
                     "implicit memory datasets can only be used with serialisable data"
                 ) from serialisation_exc
             raise exc  # pragma: no cover
@@ -55,3 +57,8 @@ class SharedMemoryDataset(AbstractDataset):
     def _describe(self) -> dict[str, Any]:
         """SharedMemoryDataset doesn't have any constructor argument to return."""
         return {}
+
+    def _exists(self) -> bool:
+        if not self.shared_memory_dataset:
+            return False
+        return self.shared_memory_dataset.exists()  # type: ignore[no-any-return]

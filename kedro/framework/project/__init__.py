@@ -1,5 +1,6 @@
 """``kedro.framework.project`` module provides utility to
 configure a Kedro project and access its settings."""
+
 from __future__ import annotations
 
 import importlib
@@ -7,12 +8,11 @@ import logging.config
 import operator
 import os
 import traceback
-import types
 import warnings
 from collections import UserDict
 from collections.abc import MutableMapping
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import dynaconf
 import importlib_resources
@@ -20,7 +20,11 @@ import yaml
 from dynaconf import LazySettings
 from dynaconf.validator import ValidationError, Validator
 
+from kedro.io import CatalogProtocol
 from kedro.pipeline import Pipeline, pipeline
+
+if TYPE_CHECKING:
+    import types
 
 IMPORT_ERROR_MESSAGE = (
     "An error occurred while importing the '{module}' module. Nothing "
@@ -53,6 +57,25 @@ class _IsSubclassValidator(Validator):
                     f"Invalid value '{setting_value.__module__}.{setting_value.__qualname__}' "
                     f"received for setting '{name}'. It must be a subclass of "
                     f"'{default_class.__module__}.{default_class.__qualname__}'."
+                )
+
+
+class _ImplementsCatalogProtocolValidator(Validator):
+    """A validator to check if the supplied setting value is a subclass of the default class"""
+
+    def validate(
+        self, settings: dynaconf.base.Settings, *args: Any, **kwargs: Any
+    ) -> None:
+        super().validate(settings, *args, **kwargs)
+
+        protocol = CatalogProtocol
+        for name in self.names:
+            setting_value = getattr(settings, name)
+            if not isinstance(setting_value(), protocol):
+                raise ValidationError(
+                    f"Invalid value '{setting_value.__module__}.{setting_value.__qualname__}' "
+                    f"received for setting '{name}'. It must implement "
+                    f"'{protocol.__module__}.{protocol.__qualname__}'."
                 )
 
 
@@ -101,7 +124,7 @@ class _ProjectSettings(LazySettings):
     )
     _SESSION_STORE_CLASS = _IsSubclassValidator(
         "SESSION_STORE_CLASS",
-        default=_get_default_class("kedro.framework.session.session.BaseSessionStore"),
+        default=_get_default_class("kedro.framework.session.store.BaseSessionStore"),
     )
     _SESSION_STORE_ARGS = Validator("SESSION_STORE_ARGS", default={})
     _DISABLE_HOOKS_FOR_PLUGINS = Validator("DISABLE_HOOKS_FOR_PLUGINS", default=tuple())
@@ -112,8 +135,9 @@ class _ProjectSettings(LazySettings):
     _CONFIG_LOADER_ARGS = Validator(
         "CONFIG_LOADER_ARGS", default={"base_env": "base", "default_run_env": "local"}
     )
-    _DATA_CATALOG_CLASS = _IsSubclassValidator(
-        "DATA_CATALOG_CLASS", default=_get_default_class("kedro.io.DataCatalog")
+    _DATA_CATALOG_CLASS = _ImplementsCatalogProtocolValidator(
+        "DATA_CATALOG_CLASS",
+        default=_get_default_class("kedro.io.DataCatalog"),
     )
 
     def __init__(self, *args: Any, **kwargs: Any):
@@ -217,39 +241,33 @@ class _ProjectLogging(UserDict):
     def __init__(self) -> None:
         """Initialise project logging. The path to logging configuration is given in
         environment variable KEDRO_LOGGING_CONFIG (defaults to conf/logging.yml)."""
-
-        # Check if a user path is set in the environment variable
+        logger = logging.getLogger(__name__)
         user_logging_path = os.environ.get("KEDRO_LOGGING_CONFIG")
+        project_logging_path = Path("conf/logging.yml")
+        default_logging_path = Path(
+            Path(__file__).parent / "rich_logging.yml"
+            if importlib.util.find_spec("rich")
+            else Path(__file__).parent / "default_logging.yml",
+        )
+        path: str | Path
+        msg = ""
 
-        # Check if the default logging configuration exists
-        default_logging_path = Path("conf/logging.yml")
-        if not default_logging_path.exists():
-            default_logging_path = Path(
-                os.environ.get(
-                    "KEDRO_LOGGING_CONFIG",
-                    Path(__file__).parent / "rich_logging.yml"
-                    if importlib.util.find_spec("rich")
-                    else Path(__file__).parent / "default_logging.yml",
-                )
-            )
+        if user_logging_path:
+            path = user_logging_path
 
-        # Use the user path if available, otherwise, use the default path
-        if user_logging_path and Path(user_logging_path).exists():
-            path = Path(user_logging_path)
+        elif project_logging_path.exists():
+            path = project_logging_path
+            msg = "You can change this by setting the KEDRO_LOGGING_CONFIG environment variable accordingly."
         else:
+            # Fallback to the framework default loggings
             path = default_logging_path
+
+        msg = f"Using '{path!s}' as logging configuration. " + msg
 
         # Load and apply the logging configuration
         logging_config = Path(path).read_text(encoding="utf-8")
         self.configure(yaml.safe_load(logging_config))
-
-        # Log info about the logging configuration
-        if not user_logging_path and default_logging_path == Path("conf/logging.yml"):
-            logger = logging.getLogger(__name__)
-            logger.info(
-                f"Using `{path}` as logging configuration. "
-                f"You can change this by setting the KEDRO_LOGGING_CONFIG environment variable accordingly."
-            )
+        logger.info(msg)
 
     def configure(self, logging_config: dict[str, Any]) -> None:
         """Configure project logging using ``logging_config`` (e.g. from project
@@ -308,7 +326,7 @@ def validate_settings() -> None:
     the settings module, dynaconf would silence any import error (e.g. missing
     dependency, missing/mislabelled pipeline), and users would instead get a cryptic
     error message ``Expected an instance of `ConfigLoader`, got `NoneType` instead``.
-    More info on the dynaconf issue: https://github.com/rochacbruno/dynaconf/issues/460
+    More info on the dynaconf issue: https://github.com/dynaconf/dynaconf/issues/460
     """
     if PACKAGE_NAME is None:
         raise ValueError(
@@ -357,7 +375,7 @@ def find_pipelines(raise_errors: bool = False) -> dict[str, Pipeline]:  # noqa: 
     can modify the mapping generated by the ``find_pipelines`` function.
 
     For more information on the pipeline registry and autodiscovery, see
-    https://kedro.readthedocs.io/en/stable/nodes_and_pipelines/pipeline_registry.html
+    https://docs.kedro.org/en/stable/nodes_and_pipelines/pipeline_registry.html
 
     Args:
         raise_errors: If ``True``, raise an error upon failed discovery.
